@@ -1,0 +1,21 @@
+{
+  "name": "gmeet-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hourly cron that turns completed Google Meet sessions into meeting_summaries rows",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/index.js --once",
+    "check-scopes": "node scripts/check-scopes.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "dotenv": "^18.0.3",
+    "googleapis": "^182.0.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^10.0.13"
+  }
+}
