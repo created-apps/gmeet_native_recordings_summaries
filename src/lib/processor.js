@@ -24,7 +24,7 @@ const {
 function durationMinutes(startedAt, finishedAt, fallbackMinutes) {
   if (startedAt && finishedAt) {
     return Math.round(
-      (new Date(finishedAt).getTime() - new Date(startedAt).getTime()) / 60000
+      (new Date(finishedAt).getTime() - new Date(startedAt).getTime()) / 1000
     );
   }
 
