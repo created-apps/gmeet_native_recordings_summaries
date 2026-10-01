@@ -266,6 +266,27 @@ async function markMeetingNotified(meetingId, errorMessage) {
   }
 }
 
+/**
+ * Backfill the recording link. The summary row is written as soon as the
+ * transcript is summarised, which is usually before Meet has published the
+ * recording -- so meeting_link is filled in later, by the retry pass, once the
+ * file actually exists.
+ */
+async function updateSummaryMeetingLink(meetingId, meetingLink) {
+  const { error } = await supabase
+    .from("meeting_summaries")
+    .update({ meeting_link: meetingLink })
+    .eq("meeting_id", meetingId)
+    .is("meeting_link", null);
+
+  if (error) {
+    logger.warn("failed to backfill recording link", {
+      meetingId,
+      error: error.message
+    });
+  }
+}
+
 async function upsertSummary(row) {
   const { data: existing, error: readError } = await supabase
     .from("meeting_summaries")
@@ -318,5 +339,6 @@ module.exports = {
   claimNotification,
   fetchSummaryRow,
   markMeetingNotified,
-  upsertSummary
+  upsertSummary,
+  updateSummaryMeetingLink
 };

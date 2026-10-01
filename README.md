@@ -219,7 +219,7 @@ The greeting name uses `users.name`, falling back to the address.
 | `workspace_id` | `WORKSPACE_ID` env |
 | `meeting_owner_email` | `CALENDAR_EMAIL` env |
 | `meeting_type` | `MEETING_TYPE` env |
-| `meeting_link` | `meetings.google_meet_link` |
+| `meeting_link` | the **Drive recording** URL, not the Meet link. NULL on the first write and backfilled by the retry pass once Meet publishes the recording. The first recording is used if a session produced several. |
 | `meeting_title` | group name + meeting date, else `Mentor session — <date>` |
 | `meeting_started_at` / `meeting_finished_at` | earliest / latest conference record times |
 | `meeting_duration` | **minutes** between those two, falling back to `meetings.duration_minutes` |

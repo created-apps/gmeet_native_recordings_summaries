@@ -17,7 +17,8 @@ const {
   claimNotification,
   fetchSummaryRow,
   markMeetingNotified,
-  upsertSummary
+  upsertSummary,
+  updateSummaryMeetingLink
 } = require("./repository");
 
 function durationMinutes(startedAt, finishedAt, fallbackMinutes) {
@@ -183,7 +184,9 @@ async function processMeeting(meeting) {
     workspace_id: config.workspaceId,
     meeting_owner_email: config.google.calendarEmail,
     meeting_type: config.meetingType,
-    meeting_link: meeting.google_meet_link,
+    // The Drive recording, not the Meet link. Null here when the recording has
+    // not been published yet; the retry pass backfills it.
+    meeting_link: artifacts.recordings[0]?.url ?? null,
     meeting_title: buildTitle(meeting, group),
     meeting_started_at: artifacts.startedAt,
     meeting_finished_at: artifacts.finishedAt,
@@ -263,6 +266,10 @@ async function retryNotifications() {
         meeting.google_meet_link,
         occurrenceWindow(meeting)
       );
+
+      if (artifacts.recordings.length > 0) {
+        await updateSummaryMeetingLink(meeting.id, artifacts.recordings[0].url);
+      }
 
       await notify(
         meeting,
