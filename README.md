@@ -57,8 +57,9 @@ none.
 4. Send the transcript to Claude for `summary` + `homework` (same prompt the
    original `script.js` used).
 5. Upsert into `meeting_summaries`.
-6. Grant the student and mentor read access to the transcript doc and the
-   recording, then email them the recap (see **Sharing and email**).
+6. If the recording exists, grant the student and mentor read access to the
+   transcript doc and the recording, then email them the recap. If it does not,
+   defer — the retry pass delivers once it lands (see **Sharing and email**).
 7. Set `summary_checked_at`.
 
 Every run then finishes with a retry pass over recaps that never went out.
@@ -110,6 +111,14 @@ After a summary is stored, the student (`student_id`) and mentor (`mentor_id`)
 are each added as a **reader** on every transcript doc and recording file for
 that occurrence, then sent one recap email containing the summary, the homework,
 and links to those files.
+
+**Nothing is shared or sent until the recording exists.** Meet publishes the
+recording to Drive well after the transcript, so a meeting is commonly
+summarised on one run and mailed a few runs later. Until then the meeting sits
+with `summary_notify_error = 'waiting for recording'` and `summary_notified_at`
+NULL, which is exactly what the retry pass looks for — it re-resolves the files
+from Google each run and delivers as soon as the recording appears. Set
+`REQUIRE_RECORDING=false` to send as soon as the transcript is summarised.
 
 Two setup steps are required before this works:
 
@@ -184,6 +193,13 @@ It gives up after `NOTIFY_RETRY_HOURS` (default 24) measured from
 `summary_checked_at`, so a permanently undeliverable meeting stops being retried
 rather than being attempted forever.
 
+This window is also what bounds the wait for a recording. A session that was
+never recorded is summarised and stored, but **no recap is ever sent** — after
+24 hours it simply stops being retried, leaving `waiting for recording` as the
+recorded reason. Lengthen `NOTIFY_RETRY_HOURS` if your recordings routinely take
+longer, or set `REQUIRE_RECORDING=false` if a transcript-only recap is better
+than none.
+
 The two passes can never collide: the main pass only selects rows where
 `summary_checked_at IS NULL`, and this one only selects rows where it is set.
 Rows are claimed with the same stale-claim mechanism.
@@ -221,7 +237,8 @@ The greeting name uses `users.name`, falling back to the address.
 See [.env.example](.env.example). `CRON_SCHEDULE` defaults to `0 * * * *`
 (top of every hour); `CRON_TIMEZONE` defaults to `UTC`; `TRANSCRIPT_GRACE_HOURS`
 defaults to `24`; `MATCH_WINDOW_MINUTES` defaults to `45`; `MEETING_TIMEZONE`
-falls back to `CRON_TIMEZONE`; `NOTIFY_RETRY_HOURS` defaults to `24`.
+falls back to `CRON_TIMEZONE`; `NOTIFY_RETRY_HOURS` defaults to `24`;
+`REQUIRE_RECORDING` defaults to `true`.
 
 Drive often publishes a transcript some time after the call ends, so a meeting
 with a conference record but no transcript yet is **not** closed out. It is left

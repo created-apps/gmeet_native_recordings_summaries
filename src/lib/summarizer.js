@@ -41,6 +41,33 @@ Respond ONLY as valid JSON with keys "summary" and "homework". No markdown, no e
 Transcript:
 `;
 
+/**
+ * Both columns are `text`, but the model answers `homework` as a JSON array of
+ * bullets about as often as it answers with one newline-separated string.
+ * Flatten either into one string so the DB write and the email agree.
+ */
+function toText(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    const lines = value
+      .map(item => (typeof item === "string" ? item : JSON.stringify(item)).trim())
+      .filter(Boolean);
+
+    return lines.length > 0 ? lines.join("\n") : null;
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  const text = String(value).trim();
+
+  return text || null;
+}
+
 async function summarizeTranscript(transcript) {
   const message = await anthropic.messages.create({
     model: config.anthropic.model,
@@ -62,12 +89,12 @@ async function summarizeTranscript(transcript) {
     const parsed = JSON.parse(cleaned);
 
     return {
-      summary: parsed.summary || null,
-      homework: parsed.homework || null
+      summary: toText(parsed.summary),
+      homework: toText(parsed.homework)
     };
   } catch {
     return { summary: text, homework: null };
   }
 }
 
-module.exports = { summarizeTranscript };
+module.exports = { summarizeTranscript, toText };

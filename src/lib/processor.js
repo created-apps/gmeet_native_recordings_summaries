@@ -74,6 +74,17 @@ function occurrenceWindow(meeting) {
  * rather than thrown, which would re-run the (paid) summarisation next hour.
  */
 async function notify(meeting, artifacts, summary, homework, title) {
+  // Nothing is shared or sent until the recording exists, so people get one
+  // email with every artefact rather than one now and another later. The
+  // retry pass re-resolves artefacts each run and delivers once it appears.
+  if (config.requireRecording && artifacts.recordings.length === 0) {
+    await markMeetingNotified(meeting.id, "waiting for recording");
+
+    logger.info("recording not ready, deferring recap", { meetingId: meeting.id });
+
+    return;
+  }
+
   const recipients = await fetchRecipients([meeting.student_id, meeting.mentor_id]);
 
   if (recipients.length === 0) {

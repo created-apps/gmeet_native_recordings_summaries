@@ -67,6 +67,10 @@ const config = {
     replyTo: process.env.MAIL_REPLY_TO || ""
   },
 
+  // Hold the recap until Drive has published the recording. Meet writes the
+  // recording well after the transcript, so this normally defers by a few runs.
+  requireRecording: String(process.env.REQUIRE_RECORDING || "true") === "true",
+
   // A processed meeting whose recap never went out is retried for this long,
   // measured from when the summary was stored.
   notifyRetryHours: Number(process.env.NOTIFY_RETRY_HOURS || 24),
