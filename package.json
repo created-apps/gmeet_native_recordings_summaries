@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/index.js --once",
-    "check-scopes": "node scripts/check-scopes.js"
+    "check-scopes": "node scripts/check-scopes.js",
+    "preview-mail": "node scripts/preview-mail.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
