@@ -154,6 +154,25 @@ Two setup steps are required before this works:
 Drive's own "X shared a file with you" notification is suppressed
 (`sendNotificationEmail: false`) so people get one email from you, not three.
 
+### Email design and preview
+
+The recap email's HTML and plain-text bodies are built by `buildEmail()` in
+[src/lib/emailTemplate.js](src/lib/emailTemplate.js) (re-exported from
+`mailer.js`). The header and arrow images are hosted in Supabase Storage; their
+URLs are the `ASSETS` constant at the top of that file.
+
+Preview it without touching Supabase, Google or any real recipient:
+
+```bash
+node scripts/preview-mail.js --scenario=full     # writes preview/mail.html and mail.txt
+node scripts/preview-mail.js --scenario=full --send   # to a local Mailpit (SMTP 1025)
+node scripts/preview-mail.js --real --to=you@example.com   # via .env SMTP, to that one address
+```
+
+Scenarios: `full`, `no-homework`, `many-homework`, `no-recording`,
+`multi-links`, `special-chars`. In PowerShell use the `node` form; `npm run
+preview-mail -- --scenario=...` drops the flag there.
+
 ### Rolling it out safely
 
 `MAIL_ENABLED` defaults to **false**, so a fresh deploy will summarise and share
@@ -254,6 +273,8 @@ as `no_transcript`.
 - [src/lib/meet.js](src/lib/meet.js) — Google auth, conference + transcript fetching
 - [src/lib/summarizer.js](src/lib/summarizer.js) — the Claude call
 - [src/lib/drive.js](src/lib/drive.js) — granting read access to files
-- [src/lib/mailer.js](src/lib/mailer.js) — SMTP delivery and the email template
+- [src/lib/mailer.js](src/lib/mailer.js) — SMTP delivery
+- [src/lib/emailTemplate.js](src/lib/emailTemplate.js) — the recap email's HTML and plain text
+- [scripts/preview-mail.js](scripts/preview-mail.js) — render or test-send the email with fake data
 - [src/lib/time.js](src/lib/time.js) — resolving `meeting_time` against a zone
 - [scripts/check-scopes.js](scripts/check-scopes.js) — `npm run check-scopes`
