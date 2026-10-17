@@ -4,12 +4,28 @@
 // Hosted in Supabase Storage (public bucket). Swap here if they ever move.
 const ASSETS = {
   header:
-    "https://mxynzemoflahdhgduplt.supabase.co/storage/v1/object/public/brochures/Thank_you.jpg",
-  arrow:
-    "https://mxynzemoflahdhgduplt.supabase.co/storage/v1/object/public/brochures/arrow.png"
+    "https://mxynzemoflahdhgduplt.supabase.co/storage/v1/object/public/brochures/Thank_you.jpg"
 };
 
 const NO_HOMEWORK = "No homework was clearly assigned.";
+
+// Dark-mode overrides. Apple Mail / iOS Mail / Outlook use the media query;
+// Outlook.com and its apps mark elements with data-ogsb (background) and
+// data-ogsc (text colour) instead, so the same rules are emitted for both.
+// Gmail's phone apps ignore both and invert colours themselves.
+function darkRules(bg, fg) {
+  return [
+    `${bg}.em-card{background-color:#26252b!important}`,
+    `${fg}.em-text{color:#e8eaf6!important}`,
+    `${bg}.em-banner{background-color:#2b3a6e!important}`,
+    `${fg}.em-banner{color:#ffffff!important}`,
+    `${bg}.em-btn{background-color:#8ab4f8!important}`,
+    `${fg}.em-btn a{color:#0a1044!important}`,
+    `${bg}.em-footer{background-color:#3a3200!important}`,
+    `${fg}.em-footer{color:#f3efd8!important}`,
+    `${fg}.em-arrow{color:#ffda1e!important}`
+  ].join("");
+}
 
 const NAVY = "#0a1044";
 const FONT = "Arial, Helvetica, sans-serif";
@@ -64,14 +80,16 @@ function renderHomework(homework) {
   const items = parseHomework(homework);
 
   if (items.length === 0) {
-    return `<p style="margin:0 0 16px;text-align:left">${NO_HOMEWORK}</p>`;
+    return `<p class="em-text" style="margin:0 0 16px;text-align:left;color:${NAVY}">${NO_HOMEWORK}</p>`;
   }
 
+  // The arrow is a text character (not an image) so its colour can follow the
+  // light/dark theme.
   const rows = items
     .map(
       item => `<tr>
-  <td width="42" valign="top" style="width:42px;padding:0 0 16px"><img src="${ASSETS.arrow}" alt="" width="26" style="display:block;width:26px;height:auto;border:0"></td>
-  <td valign="top" style="padding:0 0 16px;color:${NAVY};font-size:16px;line-height:1.4;text-align:left">${escapeHtml(item)}</td>
+  <td class="em-arrow" aria-hidden="true" width="42" valign="top" style="width:42px;padding:0 0 16px;color:${NAVY};font-family:${FONT};font-size:24px;line-height:22px;text-align:left">&rarr;</td>
+  <td class="em-text" valign="top" style="padding:0 0 16px;color:${NAVY};font-size:16px;line-height:1.4;text-align:left">${escapeHtml(item)}</td>
 </tr>`
     )
     .join("\n");
@@ -94,7 +112,7 @@ function renderButtons(label, links) {
   <td align="center" style="padding:0 0 16px">
     <table role="presentation" width="266" border="0" cellpadding="0" cellspacing="0" style="width:100%;max-width:266px">
       <tr>
-        <td align="center" bgcolor="#649cf4" style="background-color:#649cf4;border-radius:25px"><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener" style="display:block;padding:9px 8px;color:#ffffff;text-decoration:none;font-family:${FONT};font-size:16px;font-weight:700;line-height:22px">${escapeHtml(text)}</a></td>
+        <td align="center" class="em-btn" bgcolor="#649cf4" style="background-color:#649cf4;border-radius:25px"><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener" style="display:block;padding:9px 8px;color:#ffffff;text-decoration:none;font-family:${FONT};font-size:16px;font-weight:700;line-height:22px">${escapeHtml(text)}</a></td>
       </tr>
     </table>
   </td>
@@ -109,7 +127,7 @@ function banner(text) {
   <td style="padding:0 24px 16px">
     <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
       <tr>
-        <td align="center" bgcolor="#c9e7fe" class="ers-fs-240" style="background-color:#c9e7fe;background:radial-gradient(circle at 50% 50%, #c9e7fe,#dbe3fe,#ffffff,#ffffff);padding:24px;color:${NAVY};font-size:24px;font-weight:700;line-height:1.4;text-align:center">${text}</td>
+        <td align="center" bgcolor="#d6e8fd" class="em-banner ers-fs-240" style="background-color:#d6e8fd;border-radius:12px;padding:24px;color:${NAVY};font-size:24px;font-weight:700;line-height:1.4;text-align:center">${text}</td>
       </tr>
     </table>
   </td>
@@ -142,23 +160,23 @@ function renderHtml({ title, summary, homework, transcriptDocs, recordings }) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="x-apple-disable-message-reformatting">
-  <meta name="color-scheme" content="light only">
-  <meta name="supported-color-schemes" content="light only">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>${escapeHtml(title)}</title>
-  <style>body{margin:0;padding:0}table{mso-table-lspace:0;mso-table-rspace:0}@media(max-width:599px){.ecw{width:100%!important;min-width:0!important}}@media(max-width:550px){.ers-fs-240{font-size:20px!important}}</style>
+  <style>body{margin:0;padding:0}table{mso-table-lspace:0;mso-table-rspace:0}@media(max-width:550px){.ers-fs-240{font-size:20px!important}}@media (prefers-color-scheme: dark){${darkRules("", "")}}${darkRules("[data-ogsb] ", "[data-ogsc] ")}</style>
 </head>
-<body style="margin:0;padding:0;background-color:#f0f1f5;width:100%;-webkit-text-size-adjust:100%">
-<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f0f1f5" style="background-color:#f0f1f5">
+<body style="margin:0;padding:0;width:100%;-webkit-text-size-adjust:100%">
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
   <tr>
     <td align="center">
-      <table role="presentation" class="ecw" width="600" border="0" cellpadding="0" cellspacing="0" style="width:600px;min-width:600px;max-width:600px;background-color:#ffffff;font-family:${FONT};color:${NAVY};font-size:16px;line-height:1.4">
+      <table role="presentation" width="600" border="0" cellpadding="0" cellspacing="0" class="em-card" style="width:100%;max-width:600px;border-collapse:separate;border-radius:16px;overflow:hidden;background-color:#ffffff;font-family:${FONT};color:${NAVY};font-size:16px;line-height:1.4">
         <tr>
-          <td><img src="${ASSETS.header}" alt="CreatED: thanks for your time" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td>
+          <td><img src="${ASSETS.header}" alt="CreatED: thanks for your time" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;border-radius:16px 16px 0 0"></td>
         </tr>
         <tr><td style="height:24px;line-height:24px;font-size:0">&nbsp;</td></tr>
         ${banner("A QUICK RECAP")}
         <tr>
-          <td style="padding:0 24px 16px;text-align:center;color:${NAVY};font-size:16px;line-height:1.4">${escapeHtml(introText(summary))}</td>
+          <td class="em-text" style="padding:0 24px 16px;text-align:center;color:${NAVY};font-size:16px;line-height:1.4">${escapeHtml(introText(summary))}</td>
         </tr>
         ${banner("NEXT STEPS TO COVER")}
         <tr>
@@ -168,9 +186,9 @@ function renderHtml({ title, summary, homework, transcriptDocs, recordings }) {
         </tr>
         ${buttonsRow}
         <tr>
-          <td align="center" bgcolor="#ffda1e" style="background-color:#ffda1e;background:linear-gradient(180deg,#ffffff,#fff2bd,#ffda1e);padding:32px 24px;color:${NAVY};font-size:12px;line-height:1.6;text-align:center">
+          <td align="center" class="em-footer" bgcolor="#ffe27a" style="background-color:#ffe27a;padding:32px 24px;border-radius:0 0 16px 16px;color:${NAVY};font-size:12px;line-height:1.6;text-align:center">
             ${VIEW_ACCESS_NOTE}<br><br>
-            Our mailing address is:<br>${ADDRESS}<br><br>
+            Our mailing address is:<br><a style="color:inherit;text-decoration:none;pointer-events:none">${ADDRESS}</a><br><br>
             <i>${copyright()}</i>
           </td>
         </tr>
