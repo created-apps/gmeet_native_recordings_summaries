@@ -6,7 +6,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { buildEmail } = require("../src/lib/emailTemplate");
+const { buildEmail, buildSubject } = require("../src/lib/emailTemplate");
 
 const SUMMARY =
   "The class focused on understanding four metrics (MAE, RMSE, R², and MAPE) used to measure how well machine learning models work, and then trained a Random Forest model that performed better than the previous Linear Regression model.";
@@ -56,6 +56,13 @@ const scenarios = {
     transcriptDocs: [transcript(1), transcript(2)],
     recordings: [recording(1), recording(2)]
   },
+  "with-group": {
+    title: "Data Science Batch — 2026-10-06",
+    summary: SUMMARY,
+    homework: HOMEWORK.join("\n"),
+    transcriptDocs: [transcript(1)],
+    recordings: [recording(1)]
+  },
   "special-chars": {
     title: "Mentor <session> & recap — 2026-10-06",
     summary: 'We covered <b>bold</b> tags, "quotes" & ampersands in one sentence.',
@@ -84,11 +91,12 @@ fs.writeFileSync(path.join(outDir, "mail.txt"), body.text);
 console.log(`Scenario "${name}" written to:`);
 console.log(`  ${path.join(outDir, "mail.html")}`);
 console.log(`  ${path.join(outDir, "mail.txt")}`);
+console.log(`Subject: ${buildSubject(scenarios[name].title)}`);
 
 const real = process.argv.includes("--real");
 
 if (process.argv.includes("--send") || real) {
-  send(scenarios[name].title, body).catch(error => {
+  send(buildSubject(scenarios[name].title), body).catch(error => {
     console.error(`Send failed: ${error.message}`);
 
     process.exit(1);
