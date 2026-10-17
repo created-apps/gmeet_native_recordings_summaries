@@ -200,6 +200,26 @@ function renderHtml({ title, summary, homework, transcriptDocs, recordings }) {
 </html>`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * The email subject, made from the stored meeting title ("<name> — 2026-10-06"):
+ * "Session recap: <name> — 6 Oct 2026". The title itself is not changed (it is
+ * also saved as meeting_title); a title without a trailing ISO date is kept as is.
+ */
+function buildSubject(title) {
+  const text = String(title ?? "");
+  const match = text.match(/^(.*) — (\d{4})-(\d{2})-(\d{2})$/s);
+
+  if (!match || !MONTHS[Number(match[3]) - 1]) {
+    return `Session recap: ${text}`;
+  }
+
+  const [, name, year, month, day] = match;
+
+  return `Session recap: ${name} — ${Number(day)} ${MONTHS[Number(month) - 1]} ${year}`;
+}
+
 function buildEmail({ title, summary, homework, transcriptDocs, recordings }) {
   const html = renderHtml({ title, summary, homework, transcriptDocs, recordings });
 
@@ -242,4 +262,4 @@ function buildEmail({ title, summary, homework, transcriptDocs, recordings }) {
   return { html, text: textLines.join("\n") };
 }
 
-module.exports = { buildEmail };
+module.exports = { buildEmail, buildSubject };

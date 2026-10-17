@@ -1,7 +1,7 @@
 const nodemailer = require("nodemailer");
 const { config } = require("./config");
 const logger = require("./logger");
-const { buildEmail } = require("./emailTemplate");
+const { buildEmail, buildSubject } = require("./emailTemplate");
 
 let transport = null;
 
@@ -44,4 +44,4 @@ async function sendSummaryEmail({ to, subject, body }) {
   return { sent: true, messageId: info.messageId };
 }
 
-module.exports = { buildEmail, sendSummaryEmail };
+module.exports = { buildEmail, buildSubject, sendSummaryEmail };

@@ -3,7 +3,7 @@ const logger = require("./logger");
 const { getMeetingArtifacts } = require("./meet");
 const { zonedDateTimeToUtc } = require("./time");
 const { shareFiles } = require("./drive");
-const { buildEmail, sendSummaryEmail } = require("./mailer");
+const { buildEmail, buildSubject, sendSummaryEmail } = require("./mailer");
 const { summarizeTranscript } = require("./summarizer");
 const {
   fetchPendingMeetings,
@@ -115,7 +115,7 @@ async function notify(meeting, artifacts, summary, homework, title) {
 
   const result = await sendSummaryEmail({
     to: emails,
-    subject: title,
+    subject: buildSubject(title),
     body
   });
 

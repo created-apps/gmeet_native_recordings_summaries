@@ -158,8 +158,9 @@ Drive's own "X shared a file with you" notification is suppressed
 
 The recap email's HTML and plain-text bodies are built by `buildEmail()` in
 [src/lib/emailTemplate.js](src/lib/emailTemplate.js) (re-exported from
-`mailer.js`). The header and arrow images are hosted in Supabase Storage; their
-URLs are the `ASSETS` constant at the top of that file.
+`mailer.js`). The header image is hosted in Supabase Storage; its URL is the
+`ASSETS` constant at the top of that file. The subject line comes from
+`buildSubject()` in the same file: `Session recap: <name> — 6 Oct 2026`.
 
 Preview it without touching Supabase, Google or any real recipient:
 
@@ -170,7 +171,7 @@ node scripts/preview-mail.js --real --to=you@example.com   # via .env SMTP, to t
 ```
 
 Scenarios: `full`, `no-homework`, `many-homework`, `no-recording`,
-`multi-links`, `special-chars`. In PowerShell use the `node` form; `npm run
+`multi-links`, `with-group`, `special-chars`. In PowerShell use the `node` form; `npm run
 preview-mail -- --scenario=...` drops the flag there.
 
 ### Rolling it out safely
