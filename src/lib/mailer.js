@@ -21,13 +21,13 @@ function getTransport() {
   return transport;
 }
 
-async function sendSummaryEmail({ to, subject, body }) {
+async function sendSummaryEmail({ to, cc = [], subject, body }) {
   if (to.length === 0) {
     return { sent: false, reason: "no recipients" };
   }
 
   if (!config.mail.enabled || config.dryRun) {
-    logger.info("mail disabled, not sending", { to, subject });
+    logger.info("mail disabled, not sending", { to, cc, subject });
 
     return { sent: false, reason: "mail disabled" };
   }
@@ -35,6 +35,7 @@ async function sendSummaryEmail({ to, subject, body }) {
   const info = await getTransport().sendMail({
     from: config.mail.from,
     to: to.join(", "),
+    cc: cc.length > 0 ? cc.join(", ") : undefined,
     replyTo: config.mail.replyTo || undefined,
     subject,
     text: body.text,

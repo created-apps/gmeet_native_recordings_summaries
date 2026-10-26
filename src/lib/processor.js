@@ -5,6 +5,8 @@ const { zonedDateTimeToUtc } = require("./time");
 const { shareFiles } = require("./drive");
 const { buildEmail, buildSubject, sendSummaryEmail } = require("./mailer");
 const { summarizeTranscript } = require("./summarizer");
+const { sendGroupMessage, resolveGroupChat } = require("./periskope");
+const { buildWhatsappMessage } = require("./whatsappMessage");
 const {
   fetchPendingMeetings,
   claimMeeting,
@@ -13,10 +15,12 @@ const {
   markMeetingPending,
   fetchGroup,
   fetchRecipients,
+  fetchParentRecipients,
   fetchMeetingsAwaitingNotification,
   claimNotification,
   fetchSummaryRow,
   markMeetingNotified,
+  markMeetingWhatsapp,
   upsertSummary,
   updateSummaryMeetingLink
 } = require("./repository");
@@ -68,16 +72,121 @@ function occurrenceWindow(meeting) {
   };
 }
 
+/** True when a cut-off is set and the meeting is dated before it (YYYY-MM-DD compares as text). */
+function isBefore(meeting, fromDate) {
+  return Boolean(fromDate) && String(meeting.meeting_date) < fromDate;
+}
+
 /**
- * Give the student and mentor read access to the transcript doc and recording,
- * then email them the recap. Best effort by design: the summary is already
- * saved at this point, so a mail or sharing failure is recorded on the meeting
- * rather than thrown, which would re-run the (paid) summarisation next hour.
+ * Post the recap in the meeting's own WhatsApp group. Independent of the email:
+ * it records its outcome on its own columns, never throws, and so can neither
+ * block nor repeat the email. Does nothing while WHATSAPP_ENABLED is off (and
+ * records nothing, so switching it on later only affects meetings notified from
+ * then on). A dry run logs the message and records nothing.
+ *
+ *   sent    -> final
+ *   skipped -> final (no usable group id for the meeting)
+ *   failed  -> picked up again by the retry pass until NOTIFY_RETRY_HOURS
+ */
+async function postRecapToWhatsapp(meeting, artifacts, summary, homework) {
+  if (!config.whatsapp.enabled) {
+    return;
+  }
+
+  if (["sent", "skipped"].includes(meeting.summary_whatsapp_status)) {
+    return;
+  }
+
+  // Older meetings (already in the queue when WhatsApp went live) are left alone.
+  // Nothing is recorded, so they are never picked up for a post later either.
+  if (isBefore(meeting, config.whatsapp.fromDate)) {
+    logger.info("whatsapp post not made: meeting is before WHATSAPP_FROM_DATE", {
+      meetingId: meeting.id,
+      meetingDate: meeting.meeting_date,
+      fromDate: config.whatsapp.fromDate
+    });
+
+    return;
+  }
+
+  const record = async (status, reason) => {
+    if (!config.dryRun) {
+      await markMeetingWhatsapp(meeting.id, status, reason);
+    }
+  };
+
+  try {
+    const group = await fetchGroup(meeting.group_id);
+    const target = resolveGroupChat(meeting.group_id, group);
+
+    if (target.skip) {
+      await record(target.final ? "skipped" : "failed", target.skip);
+
+      logger.warn("whatsapp post not made", {
+        meetingId: meeting.id,
+        reason: target.skip,
+        final: target.final
+      });
+
+      return;
+    }
+
+    const result = await sendGroupMessage({
+      chatId: target.chatId,
+      message: buildWhatsappMessage({
+        meetingDate: meeting.meeting_date,
+        summary,
+        homework,
+        transcriptDocs: artifacts.transcriptDocs,
+        recordings: artifacts.recordings
+      })
+    });
+
+    if (config.dryRun) {
+      return;
+    }
+
+    if (result.sent) {
+      await record("sent", null);
+
+      logger.info("whatsapp posted", {
+        meetingId: meeting.id,
+        status: result.status,
+        uniqueId: result.uniqueId
+      });
+
+      return;
+    }
+
+    await record("failed", result.reason || "whatsapp not sent");
+
+    logger.warn("whatsapp post failed", {
+      meetingId: meeting.id,
+      reason: result.reason,
+      ambiguous: Boolean(result.ambiguous)
+    });
+  } catch (error) {
+    await record("failed", error.message);
+
+    logger.error("whatsapp post errored", { meetingId: meeting.id, error: error.message });
+  }
+}
+
+/**
+ * Deliver the recap: the email to the student and mentor (parent in Cc), and the
+ * post in the WhatsApp group. Best effort by design: the summary is already saved
+ * at this point, so a failure is recorded on the meeting rather than thrown,
+ * which would re-run the (paid) summarisation next hour.
+ *
+ * Nothing is shared or sent until the recording exists, so people get one message
+ * with every artefact rather than one now and another later. The retry pass
+ * re-resolves artefacts each run and delivers once it appears.
+ *
+ * The two channels are independent. Each is skipped once it has succeeded, so a
+ * retry for one never repeats the other. An email error is rethrown only after the
+ * WhatsApp step has run, so the callers record it exactly as before.
  */
 async function notify(meeting, artifacts, summary, homework, title) {
-  // Nothing is shared or sent until the recording exists, so people get one
-  // email with every artefact rather than one now and another later. The
-  // retry pass re-resolves artefacts each run and delivers once it appears.
   if (config.requireRecording && artifacts.recordings.length === 0) {
     await markMeetingNotified(meeting.id, "waiting for recording");
 
@@ -86,6 +195,28 @@ async function notify(meeting, artifacts, summary, homework, title) {
     return;
   }
 
+  let emailError = null;
+
+  if (!meeting.summary_notified_at) {
+    try {
+      await sendRecapEmail(meeting, artifacts, summary, homework, title);
+    } catch (error) {
+      emailError = error;
+    }
+  }
+
+  await postRecapToWhatsapp(meeting, artifacts, summary, homework);
+
+  if (emailError) {
+    throw emailError;
+  }
+}
+
+/**
+ * Give the student, mentor and parent read access to the transcript doc and
+ * recording, then email the student and mentor with the parent in Cc.
+ */
+async function sendRecapEmail(meeting, artifacts, summary, homework, title) {
   const recipients = await fetchRecipients([meeting.student_id, meeting.mentor_id]);
 
   if (recipients.length === 0) {
@@ -98,12 +229,25 @@ async function notify(meeting, artifacts, summary, homework, title) {
 
   const emails = recipients.map(recipient => recipient.email);
 
+  // The student's parent is CC'd and shared the same files. Anyone already in
+  // To (a parent who is also the student's or mentor's address) is left out.
+  // Meetings dated before PARENT_CC_FROM_DATE are emailed without a parent.
+  const parents = isBefore(meeting, config.parentCc.fromDate)
+    ? []
+    : await fetchParentRecipients(meeting.student_id);
+
+  const toAddresses = new Set(emails.map(email => email.toLowerCase()));
+
+  const ccEmails = parents
+    .map(parent => parent.email)
+    .filter(email => !toAddresses.has(email.toLowerCase()));
+
   const fileIds = [
     ...artifacts.transcriptDocs.map(doc => doc.fileId),
     ...artifacts.recordings.map(recording => recording.fileId)
   ];
 
-  const { failures } = await shareFiles(fileIds, emails);
+  const { failures } = await shareFiles(fileIds, [...emails, ...ccEmails]);
 
   const body = buildEmail({
     title,
@@ -115,6 +259,7 @@ async function notify(meeting, artifacts, summary, homework, title) {
 
   const result = await sendSummaryEmail({
     to: emails,
+    cc: ccEmails,
     subject: buildSubject(title),
     body
   });
@@ -127,6 +272,7 @@ async function notify(meeting, artifacts, summary, homework, title) {
   logger.info("notified", {
     meetingId: meeting.id,
     recipients: emails.length,
+    cc: ccEmails.length,
     files: fileIds.length,
     shareFailures: failures.length,
     emailSent: result.sent
@@ -174,10 +320,20 @@ async function processMeeting(meeting) {
     return "no_transcript";
   }
 
-  const [{ summary, homework }, group] = await Promise.all([
+  const [{ summary, homework, notify: hasContent }, group] = await Promise.all([
     summarizeTranscript(artifacts.transcript),
     fetchGroup(meeting.group_id)
   ]);
+
+  if (!hasContent) {
+    // Claude judged the transcript empty, a placeholder, or too short to tell
+    // what happened. Nothing is saved or sent, and no retry is queued.
+    await markMeetingChecked(meeting.id, "no_transcript", null);
+
+    logger.info("transcript has no usable content", { meetingId: meeting.id });
+
+    return "no_transcript";
+  }
 
   const written = await upsertSummary({
     meeting_id: meeting.id,

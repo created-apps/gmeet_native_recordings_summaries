@@ -10,6 +10,21 @@ function required(name) {
   return value;
 }
 
+/**
+ * A YYYY-MM-DD cut-off from the environment. Empty means no limit. A value that is
+ * not a date becomes one no meeting reaches, so a typo switches the feature off
+ * instead of opening it to old meetings.
+ */
+function cutoffDate(name) {
+  const value = String(process.env[name] || "").trim();
+
+  if (!value) {
+    return "";
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "9999-12-31";
+}
+
 const config = {
   google: {
     serviceAccountBase64: required("GOOGLE_SERVICE_ACCOUNT_BASE64"),
@@ -65,6 +80,39 @@ const config = {
     enabled: String(process.env.MAIL_ENABLED || "false") === "true",
     from: process.env.MAIL_FROM || "",
     replyTo: process.env.MAIL_REPLY_TO || ""
+  },
+
+  // Posting the recap to the meeting's WhatsApp group through Periskope. Off by
+  // default for the same reason as mail: turning it on messages real groups.
+  whatsapp: {
+    enabled: String(process.env.WHATSAPP_ENABLED || "false") === "true",
+
+    // Meetings dated before this are never posted to WhatsApp, so meetings already
+    // in the queue when this goes live are left alone.
+    fromDate: cutoffDate("WHATSAPP_FROM_DATE")
+  },
+
+  // The student's parent is CC'd (and shared the files) only on meetings dated on
+  // or after this, so meetings already in the queue are emailed as they always were.
+  parentCc: {
+    fromDate: cutoffDate("PARENT_CC_FROM_DATE")
+  },
+
+  periskope: {
+    apiKey: process.env.PERISKOPE_API_KEY || "",
+    // Optional. For groups Periskope picks a connected phone that is in the group.
+    phone: process.env.PERISKOPE_PHONE || "",
+    baseUrl: (process.env.PERISKOPE_BASE_URL || "https://api.periskope.app/v1").replace(
+      /\/+$/,
+      ""
+    ),
+    // How long Periskope waits for WhatsApp to accept the message (1 to 60).
+    syncTimeoutSeconds: Number(process.env.PERISKOPE_SYNC_TIMEOUT_SECONDS || 20),
+    // Our own cut-off for the HTTP call, a little longer than the wait above.
+    requestTimeoutMs: Number(
+      process.env.PERISKOPE_REQUEST_TIMEOUT_MS ||
+        (Number(process.env.PERISKOPE_SYNC_TIMEOUT_SECONDS || 20) + 10) * 1000
+    )
   },
 
   // Hold the recap until Drive has published the recording. Meet writes the
