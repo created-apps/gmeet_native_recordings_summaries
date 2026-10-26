@@ -262,4 +262,4 @@ function buildEmail({ title, summary, homework, transcriptDocs, recordings }) {
   return { html, text: textLines.join("\n") };
 }
 
-module.exports = { buildEmail, buildSubject };
+module.exports = { buildEmail, buildSubject, parseHomework, NO_HOMEWORK };

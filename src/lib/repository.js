@@ -12,8 +12,28 @@ const MEETING_COLUMNS = [
   "google_meet_link",
   "duration_minutes",
   "summary_checked_at",
+  "summary_notified_at",
+  "summary_whatsapp_status",
   "status"
 ].join(", ");
+
+/**
+ * A processed meeting still owes something -- the email (never sent) or the
+ * WhatsApp post (failed) -- and nobody holds a live claim on it. One OR group of
+ * AND pairs, so PostgREST ANDs nothing else in and the meaning is unambiguous:
+ *
+ *   (notified_at IS NULL OR whatsapp_status = 'failed')
+ *   AND (claimed_at IS NULL OR claimed_at < :staleBefore)
+ *
+ * A meeting whose email went out before WhatsApp existed has no WhatsApp status
+ * and is NOT owed anything, so past meetings are never posted to.
+ */
+function owedAndUnclaimedFilter(staleBefore) {
+  const owed = ["summary_notified_at.is.null", "summary_whatsapp_status.eq.failed"];
+  const free = ["summary_claimed_at.is.null", `summary_claimed_at.lt.${staleBefore}`];
+
+  return owed.flatMap(o => free.map(f => `and(${o},${f})`)).join(",");
+}
 
 /**
  * Completed, opted-in meetings this cron has not finished with yet. Rows whose
@@ -114,9 +134,8 @@ async function fetchMeetingsAwaitingNotification() {
     .from("meetings")
     .select(MEETING_COLUMNS)
     .eq("summary_status", "processed")
-    .is("summary_notified_at", null)
     .gte("summary_checked_at", retryFrom)
-    .or(`summary_claimed_at.is.null,summary_claimed_at.lt.${staleBefore}`)
+    .or(owedAndUnclaimedFilter(staleBefore))
     .order("summary_checked_at", { ascending: true })
     .limit(config.notifyBatchSize);
 
@@ -139,8 +158,7 @@ async function claimNotification(meetingId) {
       summary_claimed_by: config.workerId
     })
     .eq("id", meetingId)
-    .is("summary_notified_at", null)
-    .or(`summary_claimed_at.is.null,summary_claimed_at.lt.${staleBefore}`)
+    .or(owedAndUnclaimedFilter(staleBefore))
     .select("id");
 
   if (error) {
@@ -249,6 +267,63 @@ async function fetchRecipients(userIds) {
     }));
 }
 
+/**
+ * The parent(s) of one student: users with role 'parent' in the student's own
+ * group. The student's users.group_id is used, not meetings.group_id, because the
+ * two differ on some meetings and the parent is linked to the user. Parents with
+ * no email, and repeated addresses, are dropped; a student with no group has none.
+ */
+async function fetchParentRecipients(studentId) {
+  if (!studentId) {
+    return [];
+  }
+
+  const { data: student, error: studentError } = await supabase
+    .from("users")
+    .select("group_id")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  if (studentError) {
+    throw new Error(`Failed to fetch student ${studentId}: ${studentError.message}`);
+  }
+
+  if (!student || !student.group_id) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, email")
+    .eq("group_id", student.group_id)
+    .eq("role", "parent");
+
+  if (error) {
+    throw new Error(`Failed to fetch parents for ${studentId}: ${error.message}`);
+  }
+
+  const seen = new Set();
+
+  return (data || [])
+    .filter(user => user.email)
+    .map(user => ({
+      id: user.id,
+      email: String(user.email).trim(),
+      name: user.name || user.email
+    }))
+    .filter(parent => {
+      const key = parent.email.toLowerCase();
+
+      if (!parent.email || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+
+      return true;
+    });
+}
+
 async function markMeetingNotified(meetingId, errorMessage) {
   const { error } = await supabase
     .from("meetings")
@@ -263,6 +338,25 @@ async function markMeetingNotified(meetingId, errorMessage) {
       meetingId,
       error: error.message
     });
+  }
+}
+
+/**
+ * Record the WhatsApp post on its own columns, apart from the email's. 'sent' sets
+ * the time; 'skipped' is final; 'failed' is picked up again by the retry pass.
+ */
+async function markMeetingWhatsapp(meetingId, status, errorMessage) {
+  const { error } = await supabase
+    .from("meetings")
+    .update({
+      summary_whatsapp_status: status,
+      summary_whatsapp_sent_at: status === "sent" ? new Date().toISOString() : null,
+      summary_whatsapp_error: errorMessage || null
+    })
+    .eq("id", meetingId);
+
+  if (error) {
+    logger.warn("failed to record whatsapp state", { meetingId, error: error.message });
   }
 }
 
@@ -335,10 +429,13 @@ module.exports = {
   markMeetingPending,
   fetchGroup,
   fetchRecipients,
+  fetchParentRecipients,
   fetchMeetingsAwaitingNotification,
   claimNotification,
   fetchSummaryRow,
   markMeetingNotified,
+  markMeetingWhatsapp,
+  owedAndUnclaimedFilter,
   upsertSummary,
   updateSummaryMeetingLink
 };
