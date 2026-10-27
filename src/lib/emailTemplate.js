@@ -21,8 +21,6 @@ function darkRules(bg, fg) {
     `${fg}.em-banner{color:#ffffff!important}`,
     `${bg}.em-btn{background-color:#8ab4f8!important}`,
     `${fg}.em-btn a{color:#0a1044!important}`,
-    `${bg}.em-footer{background-color:#3a3200!important}`,
-    `${fg}.em-footer{color:#f3efd8!important}`,
     `${fg}.em-arrow{color:#ffda1e!important}`
   ].join("");
 }
@@ -186,7 +184,7 @@ function renderHtml({ title, summary, homework, transcriptDocs, recordings }) {
         </tr>
         ${buttonsRow}
         <tr>
-          <td align="center" class="em-footer" bgcolor="#ffe27a" style="background-color:#ffe27a;padding:32px 24px;border-radius:0 0 16px 16px;color:${NAVY};font-size:12px;line-height:1.6;text-align:center">
+          <td align="center" class="em-footer" bgcolor="#ffd647" style="background-color:#ffd647;padding:32px 24px;border-radius:0 0 16px 16px;color:${NAVY};font-size:12px;line-height:1.6;text-align:center">
             ${VIEW_ACCESS_NOTE}<br><br>
             Our mailing address is:<br><a style="color:inherit;text-decoration:none;pointer-events:none">${ADDRESS}</a><br><br>
             <i>${copyright()}</i>
